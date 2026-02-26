@@ -1,0 +1,1 @@
+Rank the following candidate passages by relevance to the query.
