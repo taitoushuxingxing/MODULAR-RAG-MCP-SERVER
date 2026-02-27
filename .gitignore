@@ -1,19 +1,2 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-build/
-dist/
-.pytest_cache/
-
-# Environments
-.venv/
-.env
-.env.*
-
-# IDE
-.vscode/
-.idea/
+.vscode
+.venv

@@ -141,7 +141,7 @@ cp .env.example .env
 # 编辑 .env 文件，填入您的 API Keys
 
 # 运行服务
-python main.py
+python src/main.py
 ```
 
 详细的环境配置、部署指南与使用示例请参考 [DEV_SPEC.md](DEV_SPEC.md)。

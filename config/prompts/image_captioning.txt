@@ -1,1 +1,0 @@
-You are an image captioning assistant. Describe the image clearly and concisely.
