@@ -12,6 +12,21 @@ from src.libs.splitter.base_splitter import BaseSplitter
 if TYPE_CHECKING:
     from src.core.settings import Settings
 
+def _register_builtin_providers() -> None:
+    """Register built-in splitter providers.
+    
+    This function is called automatically when the module is imported.
+    It registers all available splitter implementations with the factory.
+    """
+    # Import here to avoid circular imports and handle missing dependencies gracefully
+    try:
+        from src.libs.splitter.recursive_splitter import RecursiveSplitter
+        SplitterFactory.register_provider("recursive", RecursiveSplitter)
+    except ImportError:
+        pass  # RecursiveSplitter not available (missing langchain dependency)
+
+
+
 class SplitterFactory:
     """Factory for creating Splitter provider instances.
     
@@ -94,3 +109,6 @@ class SplitterFactory:
             Sorted list of available provider identifiers.
         """
         return sorted(cls._PROVIDERS.keys())  
+    
+# Auto-register built-in providers when module is imported
+_register_builtin_providers()

@@ -36,6 +36,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "openai>=1.0",
+    "langchain-text-splitters>=0.3.0",
 ]
 
 [project.scripts]
