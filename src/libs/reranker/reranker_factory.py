@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.libs.reranker.base_reranker import BaseReranker, NoneReranker
+from src.libs.reranker.base_reranker import BaseReranker, NonReranker
 
 if TYPE_CHECKING:
     from src.core.settings import Settings
+
+def _lazy_import_llm_reranker():
+    """Lazy import to avoid circular dependencies."""
+    from src.libs.reranker.llm_reranker import LLMReranker
+    return LLMReranker
 
 
 class RerankerFactory:
