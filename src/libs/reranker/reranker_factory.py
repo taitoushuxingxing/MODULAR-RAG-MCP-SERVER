@@ -20,6 +20,11 @@ def _lazy_import_llm_reranker():
     from src.libs.reranker.llm_reranker import LLMReranker
     return LLMReranker
 
+def _lazy_import_cross_encoder_reranker():
+    """Lazy import to avoid circular dependencies."""
+    from src.libs.reranker.cross_encoder_reranker import CrossEncoderReranker
+    return CrossEncoderReranker
+
 
 class RerankerFactory:
     """Factory for creating Reranker provider instances.
@@ -70,6 +75,18 @@ class RerankerFactory:
             ValueError: If the configured provider is not supported or missing.
             RuntimeError: If provider initialization fails.
         """
+        
+        # Lazy register LLM reranker if not already registered
+        if "llm" not in cls._PROVIDERS:
+            LLMReranker = _lazy_import_llm_reranker()
+            cls.register_provider("llm", LLMReranker)
+        
+        # Lazy register Cross-Encoder reranker if not already registered
+        if "cross_encoder" not in cls._PROVIDERS:
+            CrossEncoderReranker = _lazy_import_cross_encoder_reranker()
+            cls.register_provider("cross_encoder", CrossEncoderReranker)
+        
+
         try:
             rerank_settings = settings.rerank
             if rerank_settings is None:
@@ -83,7 +100,7 @@ class RerankerFactory:
             ) from e
         
         if not enabled or provider_name == "none":
-            return NoneReranker(settings=settings, **override_kwargs)
+            return NonReranker(settings=settings, **override_kwargs)
         
         provider_class = cls._PROVIDERS.get(provider_name)
         if provider_class is None:
