@@ -36,9 +36,17 @@ class AzureEmbedding(BaseEmbedding):
         >>> embedding = AzureEmbedding(settings)
         >>> vectors = embedding.embed(["hello world", "test"])
     """
+    
     DEFAULT_API_VERSION = "2024-02-01"
-
-    def __init__(self, settings: Any, api_key: Optional[str] = None, azure_endpoint: Optional[str] = None, api_version: Optional[str] = None, **kwargs: Any) -> None:
+    
+    def __init__(
+        self,
+        settings: Any,
+        api_key: Optional[str] = None,
+        azure_endpoint: Optional[str] = None,
+        api_version: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the Azure OpenAI Embedding provider.
         
         Args:
@@ -50,55 +58,58 @@ class AzureEmbedding(BaseEmbedding):
         
         Raises:
             ValueError: If required Azure-specific configuration is missing.
-        """        
+        """
         # Azure uses 'deployment_name' instead of 'model'
         # Try settings.embedding.deployment_name first, fallback to model
         self.deployment_name = (
             getattr(settings.embedding, 'deployment_name', None) or 
             settings.embedding.model
         )
-
+        
         # Extract optional dimensions setting
         self.dimensions = getattr(settings.embedding, 'dimensions', None)
-
-        # API key: explicit > env var AZURE_OPENAI_API_KEY > OPENAI_API_KEY (fallback)
+        
+        # API key: explicit parameter > settings.yaml > env var (fallback for backward compatibility)
         self.api_key = (
             api_key or 
+            getattr(settings.embedding, 'api_key', None) or
             os.environ.get("AZURE_OPENAI_API_KEY") or
             os.environ.get("OPENAI_API_KEY")
         )
-
         if not self.api_key:
             raise ValueError(
-                "Azure OpenAI API key not provided. Set AZURE_OPENAI_API_KEY "
-                "environment variable or pass api_key parameter."
-            )        
-
-        # Azure endpoint: explicit > env var > settings
+                "Azure OpenAI API key not provided. Configure 'api_key' in settings.yaml, "
+                "set AZURE_OPENAI_API_KEY environment variable, or pass api_key parameter."
+            )
+        
+        # Azure endpoint: explicit parameter > settings.yaml > env var (fallback)
         self.azure_endpoint = (
             azure_endpoint or
-            os.environ.get("AZURE_OPENAI_ENDPOINT") or
-            getattr(settings.embedding, 'azure_endpoint', None)
+            getattr(settings.embedding, 'azure_endpoint', None) or
+            os.environ.get("AZURE_OPENAI_ENDPOINT")
         )
-
         if not self.azure_endpoint:
             raise ValueError(
-                "Azure OpenAI endpoint not provided. Set AZURE_OPENAI_ENDPOINT "
-                "environment variable, configure 'azure_endpoint' in settings.yaml, "
-                "or pass azure_endpoint parameter."
+                "Azure OpenAI endpoint not provided. Configure 'azure_endpoint' in settings.yaml, "
+                "set AZURE_OPENAI_ENDPOINT environment variable, or pass azure_endpoint parameter."
             )
-
+        
         # API version: explicit > settings > default
         self.api_version = (
             api_version or
             getattr(settings.embedding, 'api_version', None) or
             self.DEFAULT_API_VERSION
         )
-
+        
         # Store any additional kwargs for future use
         self._extra_config = kwargs
-
-    def embed(self, texts: List[str], trace: Optional[Any] = None, **kwargs: Any) -> List[List[float]]:
+    
+    def embed(
+        self,
+        texts: List[str],
+        trace: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> List[List[float]]:
         """Generate embeddings for a batch of texts using Azure OpenAI API.
         
         Args:
@@ -116,8 +127,8 @@ class AzureEmbedding(BaseEmbedding):
         """
         # Validate input
         self.validate_texts(texts)
-
-                # Import Azure OpenAI client (lazy import to avoid dependency at module level)
+        
+        # Import Azure OpenAI client (lazy import to avoid dependency at module level)
         try:
             from openai import AzureOpenAI
         except ImportError as e:
@@ -126,26 +137,27 @@ class AzureEmbedding(BaseEmbedding):
                 "Install with: pip install openai"
             ) from e
         
-                # Initialize Azure OpenAI client
+        # Initialize Azure OpenAI client
         client = AzureOpenAI(
             api_key=self.api_key,
             azure_endpoint=self.azure_endpoint,
             api_version=self.api_version,
         )
-
+        
         # Prepare API call parameters
         # Azure uses 'model' parameter but expects deployment name
         api_params = {
             "input": texts,
             "model": self.deployment_name,
         }
-
-        # Add dimensions if specified (only for text-embedding-3-* deployments)
+        
+        # Add dimensions if specified (only for text-embedding-3-* models)
+        # text-embedding-ada-002 does NOT support dimensions parameter
         dimensions = kwargs.get("dimensions", self.dimensions)
-        if dimensions is not None:
-            api_params["dimensions"] = dimensions      
-
-         # Call Azure OpenAI API
+        if dimensions is not None and "text-embedding-3" in self.deployment_name.lower():
+            api_params["dimensions"] = dimensions
+        
+        # Call Azure OpenAI API
         try:
             response = client.embeddings.create(**api_params)
         except Exception as e:
@@ -154,7 +166,7 @@ class AzureEmbedding(BaseEmbedding):
             ) from e
         
         # Extract embeddings from response
-        # Response format is identical to OpenAI  
+        # Response format is identical to OpenAI
         try:
             embeddings = [item.embedding for item in response.data]
         except (AttributeError, KeyError) as e:
@@ -190,8 +202,8 @@ class AzureEmbedding(BaseEmbedding):
             "text-embedding-3-small": 1536,
             "text-embedding-3-large": 3072,
             "text-embedding-ada-002": 1536,
-        }        
-
+        }
+        
         # Try exact match first
         if self.deployment_name in deployment_dimensions:
             return deployment_dimensions[self.deployment_name]
