@@ -1659,7 +1659,7 @@ observability:
 | B7.3 | OpenAI & Azure Embedding 实现 | [x] | 2026-01-28 | OpenAIEmbedding + AzureEmbedding + 27个单元测试 |
 | B7.4 | Local Embedding 实现 | [ ] | - | |
 | B7.5 | Recursive Splitter 默认实现 | [ ] | - | |
-| B7.6 | ChromaStore 默认实现 | [ ] | - | |
+| B7.6 | ChromaStore 默认实现 | [x] | 2026-01-30 | ChromaStore + 20个集成测试 + roundtrip验证 |
 | B7.7 | LLM Reranker 实现 | [ ] | - | |
 | B7.8 | Cross-Encoder Reranker 实现 | [ ] | - | |
 
