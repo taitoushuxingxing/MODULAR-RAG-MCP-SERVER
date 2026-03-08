@@ -1694,7 +1694,7 @@ observability:
 | C2 | 文件完整性检查（SHA256） | [x] | 2026-01-30 | FileIntegrityChecker + SQLiteIntegrityChecker + 25个单元测试 |
 | C3 | Loader 抽象基类与 PDF Loader | [ ] | - | |
 | C4 | Splitter 集成（调用 Libs） | [x] | 2026-01-31 | DocumentChunker + 19个单元测试 + 5个核心增值功能 |
-| C5 | Transform 基类 + ChunkRefiner | [ ] | - | |
+| C5 | Transform 基类 + ChunkRefiner | [x] | 2026-01-31 | BaseTransform + ChunkRefiner (Rule + LLM) + TraceContext + 25单元测试 + 5集成测试 |
 | C6 | MetadataEnricher | [ ] | - | |
 | C7 | ImageCaptioner | [ ] | - | |
 | C8 | DenseEncoder | [ ] | - | |
@@ -1756,12 +1756,12 @@ observability:
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
 | 阶段 B | 14 | 14 | 100% |
-| 阶段 C | 15 | 2 | 13% |
+| 阶段 C | 15 | 5 | 33% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **19** | **35%** |
+| **总计** | **54** | **22** | **41%** |
 
 
 ---
