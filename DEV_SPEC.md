@@ -1693,7 +1693,7 @@ observability:
 | C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord） | [x] | 2026-01-30 | Document/Chunk/ChunkRecord + 18个单元测试 |
 | C2 | 文件完整性检查（SHA256） | [x] | 2026-01-30 | FileIntegrityChecker + SQLiteIntegrityChecker + 25个单元测试 |
 | C3 | Loader 抽象基类与 PDF Loader | [ ] | - | |
-| C4 | Splitter 集成（调用 Libs） | [ ] | - | |
+| C4 | Splitter 集成（调用 Libs） | [x] | 2026-01-31 | DocumentChunker + 19个单元测试 + 5个核心增值功能 |
 | C5 | Transform 基类 + ChunkRefiner | [ ] | - | |
 | C6 | MetadataEnricher | [ ] | - | |
 | C7 | ImageCaptioner | [ ] | - | |
