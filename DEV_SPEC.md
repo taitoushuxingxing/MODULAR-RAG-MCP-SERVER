@@ -171,7 +171,7 @@
 
 设计要点：
 - **明确分层职责**：
-	- Loader：负责把原始文件解析为统一的 `Document` 对象（`text` + `metadata`）。**在当前阶段，仅实现 PDF 格式的 Loader。**
+  - Loader：负责把原始文件解析为统一的 `Document` 对象（`text` + `metadata`；类型定义集中在 `src/core/types.py`）。**在当前阶段，仅实现 PDF 格式的 Loader。**
 		- 统一输出格式采用规范化 Markdown作为 `Document.text`：这样可以更好的配合后面的Splitte（Langchain RecursiveCharacterTextSplitte））方法产出高质量切块。
 		- Loader 同时抽取/补齐基础 metadata（如 `source_path`, `doc_type=pdf`, `page`, `title/heading_outline`, `images` 引用列表等），为定位、回溯与后续 Transform 提供依据。
 	- Splitter：基于 Markdown 结构（标题/段落/代码块等）与参数配置把 `Document` 切为若干 Chunk，保留原始位置与上下文引用。
@@ -1231,6 +1231,7 @@ smart-knowledge-hub/
 │   ├── core/                            # Core 层 (核心业务逻辑)
 │   │   ├── __init__.py
 │   │   ├── settings.py                   # 配置加载与校验 (Settings：load_settings/validate_settings)
+│   │   ├── types.py                      # 核心数据类型/契约（Document/Chunk/ChunkRecord），供 ingestion/retrieval/mcp 复用
 │   │   │
 │   │   ├── query_engine/                # 查询引擎模块
 │   │   │   ├── __init__.py
@@ -1298,7 +1299,8 @@ smart-knowledge-hub/
 │   │   │   ├── base_embedding.py        # Embedding 抽象基类
 │   │   │   ├── embedding_factory.py     # Embedding 工厂
 │   │   │   ├── openai_embedding.py      # OpenAI Embedding 实现
-│   │   │   └── local_embedding.py       # 本地模型实现 (BGE/Ollama)
+│   │   │   ├── azure_embedding.py       # Azure Embedding 实现
+│   │   │   └── ollama_embedding.py      # Ollama 本地模型实现
 │   │   │
 │   │   ├── splitter/                    # Splitter 抽象 (切分策略)
 │   │   │   ├── __init__.py
@@ -1402,6 +1404,7 @@ smart-knowledge-hub/
 | 模块 | 职责 | 关键技术点 |
 |-----|-----|----------|
 | `settings.py` | 配置加载与校验 | 读取 `config/settings.yaml`，解析为 `Settings`，必填字段校验（fail-fast） |
+| `types.py` | 核心数据类型/契约（全链路复用） | 定义 `Document/Chunk/ChunkRecord`；序列化稳定；作为 ingestion/retrieval/mcp 的数据契约中心 |
 | `query_processor.py` | 查询预处理 | 关键词提取、同义词扩展、Metadata 解析 |
 | `hybrid_search.py` | 混合检索编排 | 并行 Dense/Sparse 召回，结果融合 |
 | `dense_retriever.py` | 语义向量检索 | Query Embedding，Cosine Similarity |
@@ -1415,16 +1418,14 @@ smart-knowledge-hub/
 
 | 模块 | 职责 | 关键技术点 |
 |-----|-----|----------|
-| `pipeline.py` | Pipeline 流程编排 | 串行执行，异常处理，增量更新 |
-| `pdf_loader.py` | PDF 文档解析 | MarkItDown，Markdown 标准化输出 |
-| `file_integrity.py` | 文件去重 | SHA256 哈希，增量检测 |
-| `recursive_splitter.py` | 文本切分 | LangChain RecursiveCharacterTextSplitter |
-| `chunk_refiner.py` | Chunk 智能重组 | LLM 二次加工，去噪合并 |
-| `metadata_enricher.py` | 元数据增强 | Title/Summary/Tags 自动生成 |
-| `image_captioner.py` | 图片描述生成 | Vision LLM (GPT-4o / Qwen-VL) |
-| `dense_encoder.py` | 稠密向量编码 | OpenAI Embedding / BGE |
-| `sparse_encoder.py` | 稀疏向量编码 | BM25 编码，IDF 统计 |
-| `vector_upserter.py` | 向量存储 | Chroma Upsert，幂等写入 |
+| `pipeline.py` | Pipeline 流程编排 | 串行执行（或分阶段可观测），异常处理，增量更新；统一使用 `core/types.py` 的数据契约 |
+| `transform/base_transform.py` | Transform 抽象 | 原子化、幂等；可独立重试；失败降级不阻塞 |
+| `transform/chunk_refiner.py` | Chunk 智能重组 | 规则去噪 + 可选 LLM 二次加工；可回退 |
+| `transform/metadata_enricher.py` | 元数据增强 | Title/Summary/Tags 规则生成 + 可选 LLM 增强 |
+| `transform/image_captioner.py` | 图片描述生成 | Vision LLM；写回 metadata/text；禁用/失败降级 |
+| `embedding/dense_encoder.py` | 稠密向量编码 | 通过 `libs.embedding` 调用具体 provider；批处理 |
+| `embedding/sparse_encoder.py` | 稀疏向量编码 | BM25 编码/统计（或替换实现）；批处理 |
+| `storage/vector_upserter.py` | 向量存储写入 | 通过 `libs.vector_store` Upsert；幂等；metadata 完整 |
 
 #### 5.3.4 Libs 层 (可插拔抽象)
 
@@ -1432,6 +1433,9 @@ smart-knowledge-hub/
 |---------|------------|----------|
 | `LLMClient` | Azure OpenAI | OpenAI / Ollama / DeepSeek |
 | `EmbeddingClient` | OpenAI text-embedding-3 | BGE / Ollama 本地模型 |
+| `Loader` | PDF Loader（MarkItDown） | Markdown/HTML/Code Loader 等 |
+| `FileIntegrity` | SHA256 指纹缓存/判定 | SQLite/本地 cache/远端元数据服务 |
+| `Splitter` | RecursiveCharacterTextSplitter | Semantic / FixedLen |
 | `VectorStore` | Chroma | Qdrant / Pinecone / Milvus |
 | `Reranker` | CrossEncoder | LLM Rerank / None (关闭) |
 | `Evaluator` | Ragas | DeepEval / 自定义指标 |
@@ -1554,7 +1558,7 @@ llm:
 
 # Embedding 配置
 embedding:
-  provider: openai          # openai | ollama | local
+  provider: openai          # openai | azure | ollama (本地)
   model: text-embedding-3-small
   
 # Vision LLM 配置 (图片描述)
@@ -1651,14 +1655,14 @@ observability:
 | B1 | LLM 抽象接口与工厂 | [x] | 2026-01-27 | BaseLLM + LLMFactory + 16个单元测试 |
 | B2 | Embedding 抽象接口与工厂 | [x] | 2026-01-27 | BaseEmbedding + EmbeddingFactory + 22个单元测试 |
 | B3 | Splitter 抽象接口与工厂 | [x] | 2026-01-27 | BaseSplitter + SplitterFactory + 20个单元测试 |
-| B4 | VectorStore 抽象接口与工厂 | [ ] | - | |
+| B4 | VectorStore 抽象接口与工厂 | [x] | 2026-01-27 | BaseVectorStore + VectorStoreFactory + 34个单元测试 |
 | B5 | Reranker 抽象接口与工厂（含 None 回退） | [x] | 2026-01-27 | BaseReranker + RerankerFactory + NoneReranker + 单元测试 |
-| B6 | Evaluator 抽象接口与工厂 | [x] | 2026-01-27 | BaseEvaluator + EvaluatorFactory + CustomEvaluator + 单元测试 || B7.1 | OpenAI-Compatible LLM 实现 | [ ] | - | |
+| B6 | Evaluator 抽象接口与工厂 | [x] | 2026-01-27 | BaseEvaluator + EvaluatorFactory + CustomEvaluator + 单元测试 |
 | B7.1 | OpenAI-Compatible LLM 实现 | [x] | 2026-01-28 | OpenAILLM + AzureLLM + DeepSeekLLM + 33个单元测试 |
 | B7.2 | Ollama LLM 实现 | [x] | 2026-01-28 | OllamaLLM + 32个单元测试 |
 | B7.3 | OpenAI & Azure Embedding 实现 | [x] | 2026-01-28 | OpenAIEmbedding + AzureEmbedding + 27个单元测试 |
-| B7.4 | Local Embedding 实现 | [ ] | - | |
-| B7.5 | Recursive Splitter 默认实现 | [ ] | - | |
+| B7.4 | Ollama Embedding 实现 | [x] | 2026-01-28 | OllamaEmbedding + 20个单元测试 |
+| B7.5 | Recursive Splitter 默认实现 | [x] | 2026-01-28 | RecursiveSplitter + 24个单元测试 + langchain集成 |
 | B7.6 | ChromaStore 默认实现 | [x] | 2026-01-30 | ChromaStore + 20个集成测试 + roundtrip验证 |
 | B7.7 | LLM Reranker 实现 | [x] | 2026-01-30 | LLMReranker + 20个单元测试 + prompt模板支持 |
 | B7.8 | Cross-Encoder Reranker 实现 | [x] | 2026-01-30 | CrossEncoderReranker + 26个单元测试 + 工厂集成 |
@@ -1667,7 +1671,7 @@ observability:
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| C1 | 定义核心数据模型（Document/Chunk/Record） | [ ] | - | |
+| C1 | 定义核心数据类型/契约（Document/Chunk/ChunkRecord） | [ ] | - | |
 | C2 | 文件完整性检查（SHA256） | [ ] | - | |
 | C3 | Loader 抽象基类与 PDF Loader | [ ] | - | |
 | C4 | Splitter 集成（调用 Libs） | [ ] | - | |
@@ -1732,13 +1736,13 @@ observability:
 | 阶段 | 总任务数 | 已完成 | 进度 |
 |------|---------|--------|------|
 | 阶段 A | 3 | 3 | 100% |
-| 阶段 B | 14 | 13 | 93% |
+| 阶段 B | 14 | 14 | 100% |
 | 阶段 C | 15 | 0 | 0% |
 | 阶段 D | 7 | 0 | 0% |
 | 阶段 E | 6 | 0 | 0% |
 | 阶段 F | 5 | 0 | 0% |
 | 阶段 G | 4 | 0 | 0% |
-| **总计** | **54** | **16** | **30%** |
+| **总计** | **54** | **17** | **31%** |
 
 
 ---
@@ -1898,25 +1902,32 @@ observability:
   - 在连接失败/超时等场景下，抛出可读错误且不泄露敏感配置。
 - **测试方法**：`pytest -q tests/unit/test_ollama_llm.py`。
 
-### B7.3：OpenAI Embedding 实现
-- **目标**：补齐 `openai_embedding.py`，支持批量 `embed(texts)`，并可被 mock 测试。
+### B7.3：OpenAI & Azure Embedding 实现
+- **目标**：补齐 `openai_embedding.py` 和 `azure_embedding.py`，支持 OpenAI 官方 API 和 Azure OpenAI 服务的 Embedding 调用，支持批量 `embed(texts)`，并可被 mock 测试。
 - **修改文件**：
   - `src/libs/embedding/openai_embedding.py`
-  - `tests/unit/test_embedding_providers_smoke.py`（mock HTTP）
+  - `src/libs/embedding/azure_embedding.py`
+  - `tests/unit/test_embedding_providers_smoke.py`（mock HTTP，包含 OpenAI 和 Azure 测试用例）
 - **验收标准**：
-  - provider=openai 时 `EmbeddingFactory` 可创建。
+  - provider=openai 时 `EmbeddingFactory` 可创建，支持 OpenAI 官方 API 的 text-embedding-3-small/large 等模型。
+  - provider=azure 时 `EmbeddingFactory` 可创建，正确处理 Azure 特有的 endpoint、api-version、api-key 配置，支持 Azure 部署的 text-embedding-ada-002 等模型。
   - 空输入、超长输入有明确行为（报错或截断策略由配置决定）。
+  - Azure 实现复用 OpenAI Embedding 的核心逻辑，保持行为一致性。
 - **测试方法**：`pytest -q tests/unit/test_embedding_providers_smoke.py`。
 
-### B7.4：Local Embedding 实现（BGE/Ollama 占位）
-- **目标**：补齐 `local_embedding.py` 的默认实现路径（可先做占位/适配层），并在测试中用 Fake 向量保证链路可跑。
+### B7.4：Ollama Embedding 实现
+- **目标**：补齐 `ollama_embedding.py`，支持通过 Ollama HTTP API 调用本地部署的 Embedding 模型（如 `nomic-embed-text`、`mxbai-embed-large` 等），实现 `embed(texts)` 批量向量化功能。
 - **修改文件**：
-  - `src/libs/embedding/local_embedding.py`
-  - `tests/unit/test_local_embedding.py`
+  - `src/libs/embedding/ollama_embedding.py`
+  - `tests/unit/test_ollama_embedding.py`（包含 mock HTTP 测试）
 - **验收标准**：
-  - provider=local 时 `EmbeddingFactory` 可创建。
-  - 输出向量维度稳定（配置化或固定假维度），满足 ingestion/retrieval 的接口契约。
-- **测试方法**：`pytest -q tests/unit/test_local_embedding.py`。
+  - provider=ollama 时 `EmbeddingFactory` 可创建。
+  - 支持配置 Ollama 服务地址（默认 http://localhost:11434）和模型名称。
+  - 输出向量维度由模型决定（如 nomic-embed-text 为 768 维），满足 ingestion/retrieval 的接口契约。
+  - 支持批量 `embed(texts)` 调用，内部处理单条/批量请求逻辑。
+  - 空输入、超长输入有明确行为（报错或截断策略）。
+  - mock 测试覆盖正常响应、连接失败、超时等场景。
+- **测试方法**：`pytest -q tests/unit/test_ollama_embedding.py`。
 
 ### B7.5：Recursive Splitter 默认实现
 - **目标**：补齐 `recursive_splitter.py`，封装 LangChain 的切分逻辑，作为默认切分器。
@@ -1932,11 +1943,13 @@ observability:
 - **目标**：补齐 `chroma_store.py`，支持最小 `upsert(records)` 与 `query(vector, top_k, filters)`，并支持本地持久化目录（例如 `data/db/chroma/`）。
 - **修改文件**：
   - `src/libs/vector_store/chroma_store.py`
-  - `tests/integration/test_chroma_store_roundtrip.py`（可选：标记为 integration，允许跳过）
+  - `tests/integration/test_chroma_store_roundtrip.py`
 - **验收标准**：
   - provider=chroma 时 `VectorStoreFactory` 可创建。
-  - 在可用环境下完成一次最小 roundtrip：upsert→query 返回 deterministic 结果。
-- **测试方法**：`pytest -q tests/integration/test_chroma_store_roundtrip.py`（可选）。
+  - **必须完成完整的 upsert→query roundtrip 测试**：使用 mock 数据完成真实的存储和检索流程，验证返回结果的确定性和正确性。
+  - 测试应覆盖：基本 upsert、向量查询、top_k 参数、metadata filters（如支持）。
+  - 使用临时目录进行持久化测试，测试结束后清理。
+- **测试方法**：`pytest -q tests/integration/test_chroma_store_roundtrip.py`
 
 ### B7.7：LLM Reranker（读取 rerank prompt）
 - **目标**：补齐 `llm_reranker.py`，读取 `config/prompts/rerank.txt` 构造 prompt（测试中可注入替代文本），并可在失败时返回可回退信号。
@@ -1964,16 +1977,20 @@ observability:
 
 > 注：本阶段严格按 5.4.1 的离线数据流落地，并优先实现“增量跳过（SHA256）”。
 
-### C1：定义核心数据模型（Document/Chunk/Record）
-- **目标**：定义 ingestion 与 retrieval 共用的数据结构（最少字段：text、metadata、ids）。
+### C1：定义核心数据类型/契约（Document/Chunk/ChunkRecord）
+- **目标**：定义全链路（ingestion → retrieval → mcp tools）共用的数据结构/契约，避免散落在各子模块内导致的耦合与重复。
 - **修改文件**：
-  - `src/ingestion/__init__.py`（若需新增 `src/ingestion/models.py`，需同步在 5.2 目录结构中补充）
-  - `tests/unit/test_models.py`
+  - `src/core/types.py`
+  - `src/core/__init__.py`（可选：统一 re-export 以简化导入路径）
+  - `tests/unit/test_core_types.py`
 - **实现类/函数**（建议）：
   - `Document(id, text, metadata)`
-  - `Chunk(id, text, metadata, start_offset, end_offset)`
-- **验收标准**：模型可序列化（dict/json）并在测试中断言字段稳定。
-- **测试方法**：`pytest -q tests/unit/test_models.py`。
+  - `Chunk(id, text, metadata, start_offset, end_offset, source_ref?)`
+  - `ChunkRecord(id, text, metadata, dense_vector?, sparse_vector?)`（用于存储/检索载体；字段按后续 C8~C12 演进）
+- **验收标准**：
+  - 类型可序列化（dict/json）且字段稳定（单元测试断言）。
+  - `metadata` 约定最少包含 `source_path`，其余字段允许增量扩展但不得破坏兼容。
+- **测试方法**：`pytest -q tests/unit/test_core_types.py`。
 
 ### C2：文件完整性检查（SHA256）
 - **目标**：在Libs中实现 `file_integrity.py`：计算文件 hash，并提供“是否跳过”的判定接口（先用本地 cache 文件/SQLite 任一实现，后续可替换）。
