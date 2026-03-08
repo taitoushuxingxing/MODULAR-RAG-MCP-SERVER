@@ -1700,10 +1700,10 @@ observability:
 | C6 | MetadataEnricher | [x] | 2026-01-31 | MetadataEnricher (Rule + LLM) + 26单元测试 + 真实LLM集成测试 |
 | C7 | ImageCaptioner | [x] | 2026-02-01 | ImageCaptioner + Azure Vision LLM 实现 + 集成测试 |
 | C8 | DenseEncoder | [x] | 2026-02-01 | 批量编码+Azure集成测试 |
-| C9 | SparseEncoder | [ ] | - | |
+| C9 | SparseEncoder | [x] | 2026-02-01 | 词频统计+语料库统计+26单元测试 |
 | C10 | BatchProcessor | [ ] | - | |
-| C11 | VectorUpserter | [ ] | - | |
-| C12 | BM25Indexer | [ ] | - | |
+| C11 | BM25Indexer（倒排索引+IDF计算） | [ ] | - | ⚠️ 调整：与C12交换顺序 |
+| C12 | VectorUpserter（幂等upsert） | [ ] | - | ⚠️ 调整：与C11交换顺序 |
 | C13 | ImageStorage | [ ] | - | |
 | C14 | Pipeline 编排（MVP 串起来） | [ ] | - | |
 | C15 | 脚本入口 ingest.py | [ ] | - | |
