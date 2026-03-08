@@ -1695,7 +1695,7 @@ observability:
 | C3 | Loader 抽象基类与 PDF Loader | [ ] | - | |
 | C4 | Splitter 集成（调用 Libs） | [x] | 2026-01-31 | DocumentChunker + 19个单元测试 + 5个核心增值功能 |
 | C5 | Transform 基类 + ChunkRefiner | [x] | 2026-01-31 | BaseTransform + ChunkRefiner (Rule + LLM) + TraceContext + 25单元测试 + 5集成测试 |
-| C6 | MetadataEnricher | [ ] | - | |
+| C6 | MetadataEnricher | [x] | 2026-01-31 | MetadataEnricher (Rule + LLM) + 26单元测试 + 真实LLM集成测试 |
 | C7 | ImageCaptioner | [ ] | - | |
 | C8 | DenseEncoder | [ ] | - | |
 | C9 | SparseEncoder | [ ] | - | |
